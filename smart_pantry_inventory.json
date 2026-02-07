@@ -1,7 +1,14 @@
 {
-  "air vent": 1,
-  "light fixture": 3,
-  "smoke": 1,
-  "person": 1,
-  "t-shirt": 1
+  "ceiling light": 0,
+  "computer": 0,
+  "chair": 18,
+  "table": 0,
+  "microphone stand": 3,
+  "laptop": 1,
+  "cabinet": 2,
+  "trash can": 1,
+  "wall decor": 1,
+  "light fixture": 12,
+  "exit sign": 1,
+  "window": 1
 }
