@@ -16,9 +16,7 @@ ASSIST_CLIENT = None
 ASSIST_CAMERA_INDEX = 0
 ASSIST_THREAD = None
 ASSIST_STOP = threading.Event()
-ASSIST_DEBUG = True  # Always show debug window during assist
 SKIP_TWILIO_VALIDATION = True  # Set to False for production
-DEBUG_SNAPSHOT_INTERVAL_SEC = 3
 
 
 def load_aws_config():
@@ -394,21 +392,6 @@ def guidance_phrase(dx, dy):
     return " and ".join(parts)
 
 
-def draw_debug_overlay(frame, target_bbox, hand_center, target_name):
-    h, w = frame.shape[:2]
-    if target_bbox:
-        x_min, y_min, x_max, y_max = target_bbox
-        x1, y1 = int(x_min * w), int(y_min * h)
-        x2, y2 = int(x_max * w), int(y_max * h)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 200, 0), 2)
-        cv2.putText(frame, target_name, (x1, max(0, y1 - 10)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 0), 2)
-
-    if hand_center:
-        hx, hy = int(hand_center[0] * w), int(hand_center[1] * h)
-        cv2.circle(frame, (hx, hy), 8, (0, 0, 255), -1)
-        cv2.putText(frame, "hand", (hx + 10, hy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
 
 
@@ -423,9 +406,10 @@ def assist_loop(client, camera_index, target_name):
 
     last_target_time = 0
     last_guidance_time = 0
-    last_snapshot_time = 0
     target_center = None
     target_bbox = None
+    target_last_seen = 0
+    target_hold_sec = 6
 
     while not ASSIST_STOP.is_set():
         ret, frame = cam.read()
@@ -435,27 +419,21 @@ def assist_loop(client, camera_index, target_name):
 
         now = time.time()
 
-        if now - last_target_time > 2.5:
+        if now - last_target_time > 1.5:
             target = detect_target_bbox_with_bedrock(frame, client, target_name)
             if target:
                 x_min, y_min, x_max, y_max = target["bbox"]
                 target_center = ((x_min + x_max) / 2, (y_min + y_max) / 2)
                 target_bbox = (x_min, y_min, x_max, y_max)
+                target_last_seen = now
             else:
-                target_center = None
-                target_bbox = None
+                if now - target_last_seen > target_hold_sec:
+                    target_center = None
+                    target_bbox = None
             last_target_time = now
 
         hand_center = get_hand_center(frame, hands)
 
-        if ASSIST_DEBUG and now - last_snapshot_time > DEBUG_SNAPSHOT_INTERVAL_SEC:
-            debug_frame = frame.copy()
-            draw_debug_overlay(debug_frame, target_bbox, hand_center, target_name)
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            debug_file = f"assist_debug_{ts}.jpg"
-            cv2.imwrite(debug_file, debug_frame)
-            print(f"[ASSIST] Saved debug snapshot: {debug_file}")
-            last_snapshot_time = now
 
         if now - last_guidance_time > 1.0:
             if target_center and hand_center:
